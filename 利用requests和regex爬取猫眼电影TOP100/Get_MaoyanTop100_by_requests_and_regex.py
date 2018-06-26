@@ -10,6 +10,13 @@ Created on Tue Jun 26 11:35:42 2018
 import requests
 import re
 
+#计算下运行时间
+import time
+#没有使用xxx时，同一网速，用时1.7s
+
+from multiprocessing import Pool
+
+
 header = {
         'User-Agent':'Baiduspider+'
         }
@@ -31,11 +38,19 @@ def main(page):
     url = 'http://maoyan.com/board/4?offset='+str(page)
     html = getHTML(url)
     content = parsePage(html)
-    print(content)
+    return content
 
 if __name__=='__main__':
-    for page in range(10):
-        main(page*10)
+    start = time.time()
+    
+    pool = Pool(processes=4)
+    content = pool.map(main , [i*10 for i in range(10)])
+    
+    print(content)
+    
+    end = time.time()
+    
+    print('It spends %s s'%(end-start))
     
     
     
