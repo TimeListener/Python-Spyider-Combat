@@ -5,70 +5,80 @@ Created on Tue Jun 26 11:35:42 2018
 @author: Nicobuss
 
 爬取的相关信息有：电影名次、电影名称、主演、上映时间、评分
+
+ pattern = re.compile('.*?board-index-.*?">(.*?)</i>.*?class="name">.*?'
+                         + '"boarditem-click".*?"{movieId:.*?}">+(.*?)</a>.*?class="star">'
+                         + '(.*?)</p>.*?class="releasetime">(.*?)</p>.*?<p class="score">'
+                         + '<i class="integer">(.*?)</i><i class="fraction">(.*?)</i></p>', re.S)
+
 """
 
-import requests
 import re
-
-# 计算下运行时间
 import time
-# 没有使用xxx时，同一网速，用时1.7s
-
+import requests
 from multiprocessing import Pool
-from requests.exceptions import RequestException
 import json
+from http.cookiejar import CookieJar
+from requests.exceptions import RequestException
+
+s = requests.Session()
+s.cookies = CookieJar()
 
 header = {
-    'User-Agent': 'Baiduspider+'
+    'user-agent': 'Baiduspider+',
 }
-
 
 def getHTML(url, code='utf-8'):
     try:
-        r = requests.get(url, headers=header)
-        if r.status_code == 200:
-            r.encoding = code
-            return r.text
-        else:
-            print('getHTML Error')
+        response = s.get(url, headers=header)
+        response.raise_for_status()
+        response.encoding = code
+        return response.text
     except RequestException:
         print('getHTML Error')
 
 
-def parsePage(html):
-    pattern = re.compile('.*?board-index-.*?">(.*?)</i>.*?class="name">.*?"boarditem-click".*?"{movieId:.*?}">(.*?)</a>.*?class="star">(.*?)</p>.*?class="releasetime">(.*?)</p>.*?<p class="score"><i class="integer">(.*?)</i><i class="fraction">(.*?)</i></p>',re.S)
-    items = re.findall(pattern, html)
+def parseHTML(html):
+    pattern = re.compile('.*?board-index-.*?">(.*?)</i>.*?class="name">.*?'
+                         + '"boarditem-click".*?"{movieId:.*?}">+(.*?)</a>.*?class="star">'
+                         + '(.*?)</p>.*?class="releasetime">(.*?)</p>.*?<p class="score">'
+                         + '<i class="integer">(.*?)</i><i class="fraction">(.*?)</i></p>', re.S)
+
+    items = re.findall(pattern, str(html))      #需要把html字符串化，否则报错：TypeError: expected string or bytes-like object
 
     for item in items:
         yield {
-            'index': item[0],
-            'Name': item[1],
-            'StarActor': item[2].strip(),
-            'ReleaseTime': item[3],
-            'Score': item[4] + item[5]
+            '序号': item[0],
+            '电影名': item[1],
+            '主演': item[2].strip(),
+            '上映时间': item[3],
+            '评分': item[4] + item[5],
         }
 
-def write_page(item):
-    with open('result.txt','a',encoding='utf-8') as f:
-        f.write(json.dumps(item , ensure_ascii=False)  +  '\n')
+def writePAGE(content):
+    with open('result.txt', 'a' ) as f:
+        f.write(str(content) + '\n')
+        #f.write(json.dumps(content , ensure_ascii=False) + '\n')
         f.close()
 
+
 def main(page):
-    url = 'http://maoyan.com/board/4?offset=' + str(page)
+    url = 'https://maoyan.com/board/4?offset=' + str(page)
     html = getHTML(url)
-    items = parsePage(html)
+    items = parseHTML(html)
+
     for item in items:
         print(item)
-        write_page(item)
+        writePAGE(item)
+
 
 if __name__ == '__main__':
     start = time.time()
 
     pool = Pool()
-    pool.map(main, [i * 10 for i in range(10)])
-    pool.close()
-    pool.join()
+    pool.map(main, [page * 10 for page in range(10)])
+    pool.close()  # 关闭进程池，不接受新的进程
+    pool.join()  # 主进程阻塞等待子进程的退出
 
     end = time.time()
-
     print('It spends %s s' % (end - start))
